@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: kube-system
+  labels:
+    k8s-app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: prometheus
+  template:
+    metadata:
+      labels:
+        k8s-app: prometheus
+    spec:
+      priorityClassName: system-cluster-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
+      tolerations:
+      - key: node-role.kubernetes.io/master
+      - key: node-role.kubernetes.io/not-ready
+      containers:
+        - name: prometheus-server
+          image: "registry.tongtech.com/library/prom/prometheus:latest"
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - --config.file=/etc/config/prometheus.yml
+            - --storage.tsdb.path=/data
+            - --storage.tsdb.retention.time=15d
+            - --storage.tsdb.no-lockfile
+            - --web.enable-admin-api
+            - --web.enable-lifecycle
+          ports:
+            - containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 30
+            timeoutSeconds: 30
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 30
+            timeoutSeconds: 30
+          resources:
+            requests:
+              cpu: 200m
+              memory: 1000Mi
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+            - name: rules-volume
+              mountPath: /etc/rules
+            - name: prometheus-data
+              mountPath: /data
+        - name: prometheus-server-configmap-reload
+          image: "registry.tongtech.com/library/jimmidyson/configmap-reload:latest"
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - --volume-dir=/etc/config
+            - --volume-dir=/etc/rules
+            - --webhook-url=http://localhost:9090/-/reload
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+            - name: rules-volume
+              mountPath: /etc/rules
+      volumes:
+        - name: config-volume
+          configMap:
+            name: prometheus-config
+        - name: rules-volume
+          configMap:
+            name: prometheus-rules-config
+        - name: prometheus-data
+          hostPath:
+            path: /var/lib/tongcmp/prometheus
+            type: DirectoryOrCreate
+

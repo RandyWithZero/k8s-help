@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: adapter-config
+  namespace: kube-system
+data:
+  config.yaml: |
+    resourceRules:
+      cpu:
+        containerQuery: sum(rate(container_cpu_usage_seconds_total{<<.LabelMatchers>>,name!=""}[5m])) by (<<.GroupBy>>)
+        nodeQuery: sum(rate(container_cpu_usage_seconds_total{<<.LabelMatchers>>,id='/'}[5m])) by (<<.GroupBy>>)
+        resources:
+          overrides:
+            node:
+              resource: node
+            namespace:
+              resource: namespace
+            pod:
+              resource: pod
+        containerLabel: name
+      memory:
+        containerQuery: sum(container_memory_rss{<<.LabelMatchers>>,name!=""}) by (<<.GroupBy>>)
+        nodeQuery: sum(container_memory_rss{<<.LabelMatchers>>,id='/'}) by (<<.GroupBy>>)
+        resources:
+          overrides:
+            node:
+              resource: node
+            namespace:
+              resource: namespace
+            pod:
+              resource: pod
+        containerLabel: name
+      window: 1m
+

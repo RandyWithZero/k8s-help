@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: kube-system
+  labels:
+    k8s-app: alertmanager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: alertmanager
+  template:
+    metadata:
+      labels:
+        k8s-app: alertmanager
+    spec:
+      priorityClassName: system-cluster-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
+      tolerations:
+      - key: node-role.kubernetes.io/master
+      - key: node-role.kubernetes.io/not-ready
+      containers:
+        - name: prometheus-alertmanager
+          image: "registry.tongtech.com/library/prom/alertmanager:latest"
+          imagePullPolicy: "IfNotPresent"
+          securityContext:
+            runAsUser: 0
+          args:
+            - --config.file=/etc/config/alertmanager.yml
+            - --storage.path=/data
+          ports:
+            - containerPort: 9093
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9093
+            initialDelaySeconds: 30
+            timeoutSeconds: 30
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9093
+            initialDelaySeconds: 30
+            timeoutSeconds: 30
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+            - name: storage-volume
+              mountPath: "/data"
+        - name: prometheus-alertmanager-configmap-reload
+          image: "registry.tongtech.com/library/jimmidyson/configmap-reload:latest"
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - --volume-dir=/etc/config
+            - --webhook-url=http://localhost:9093/-/reload
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/config
+      volumes:
+        - name: config-volume
+          configMap:
+            name: alertmanager-config
+        - name: storage-volume
+          hostPath:
+            path: /var/lib/tongcmp/alertmanager
+            type: DirectoryOrCreate
+

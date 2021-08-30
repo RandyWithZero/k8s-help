@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: custom-metrics-apiserver
+  name: custom-metrics-apiserver
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: custom-metrics-apiserver
+  template:
+    metadata:
+      labels:
+        app: custom-metrics-apiserver
+      name: custom-metrics-apiserver
+    spec:
+      priorityClassName: system-cluster-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
+      tolerations:
+      - key: node-role.kubernetes.io/master
+      - key: node-role.kubernetes.io/not-ready
+      containers:
+      - name: custom-metrics-apiserver
+        image: registry.tongtech.com/library/directxman12/k8s-prometheus-adapter:latest
+        args:
+        - --secure-port=6443
+        - --cert-dir=/tmp/cert
+        - --logtostderr=true
+        - --prometheus-url=http://prometheus.kube-system.svc:9090/
+        - --metrics-relist-interval=1m
+        - --v=6
+        - --config=/etc/adapter/config.yaml
+        ports:
+        - containerPort: 6443
+        volumeMounts:
+        - mountPath: /etc/adapter/
+          name: config
+          readOnly: true
+        - mountPath: /tmp
+          name: tmp-vol
+      volumes:
+      - name: config
+        configMap:
+          name: adapter-config
+      - name: tmp-vol
+        emptyDir: {}
+

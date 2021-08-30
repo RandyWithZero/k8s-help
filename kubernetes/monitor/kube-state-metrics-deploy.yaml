@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-state-metrics
+  namespace: kube-system
+  labels:
+    k8s-app: kube-state-metrics
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kube-state-metrics
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        k8s-app: kube-state-metrics
+    spec:
+      priorityClassName: system-cluster-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
+      tolerations:
+      - key: node-role.kubernetes.io/master
+      - key: node-role.kubernetes.io/not-ready
+      containers:
+      - name: kube-state-metrics
+        image: registry.tongtech.com/library/quay.io/coreos/kube-state-metrics:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http-metrics
+          containerPort: 8080
+        - name: telemetry
+          containerPort: 8081
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          timeoutSeconds: 5
+

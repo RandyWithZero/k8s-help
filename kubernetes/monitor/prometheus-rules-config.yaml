@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules-config
+  namespace: kube-system
+data:
+  alert.rules: |
+    groups: []
+  recording.rules: |-
+    groups:
+    - name: node
+      rules:
+      - record: node:cpu_total:core
+        expr: count without(cpu)(node_cpu_seconds_total{mode="idle"})
+      - record: node:cpu:core
+        expr: sum(irate(node_cpu_seconds_total{mode!="idle"}[5m]))without(cpu,mode)
+      - record: node:cpu:millicore
+        expr: node:cpu:core*1000
+      - record: node:cpu:percent
+        expr: avg(sum(irate(node_cpu_seconds_total{mode!="idle"}[5m]))without(mode))without(cpu,core)*100
+
+      - record: node:mem_total:bytes
+        expr: node_memory_MemTotal_bytes
+      - record: node:mem_total:gb
+        expr: node:mem_total:bytes/(1024*1024*1024)
+      - record: node:mem:bytes
+        expr: node_memory_MemTotal_bytes-node_memory_Cached_bytes-node_memory_MemFree_bytes-node_memory_Buffers_bytes-node_memory_Slab_bytes
+      - record: node:mem:kb
+        expr: node:mem:bytes/1024
+      - record: node:mem:mb
+        expr: node:mem:bytes/(1024*1024)
+      - record: node:mem:gb
+        expr: node:mem:bytes/(1024*1024*1024)
+      - record: node:mem:percent
+        expr: (node:mem:bytes)/node_memory_MemTotal_bytes*100
+
+      - record: node:net_io_in:bps
+        expr: sum(irate(node_network_receive_bytes_total{device!~'lo|cali.+|veth.+|flannel.+'}[5m]))without(device)
+      - record: node:net_io_in:kbps
+        expr: node:net_io_in:bps/1024
+      - record: node:net_io_in:mbps
+        expr: node:net_io_in:bps/(1024*1024)
+      - record: node:net_io_out:bps
+        expr: sum(irate(node_network_transmit_bytes_total{device!~'lo|cali.+|veth.+|flannel.+'}[5m]))without(device)
+      - record: node:net_io_out:kbps
+        expr: node:net_io_out:bps/1024
+      - record: node:net_io_out:mbps
+        expr: node:net_io_out:bps/(1024*1024)
+
+      - record: node:disk_io_read:bps
+        expr: sum(irate(node_disk_read_bytes_total[5m]))without(device)
+      - record: node:disk_io_read:kbps
+        expr: node:disk_io_read:bps/1024
+      - record: node:disk_io_read:mbps
+        expr: node:disk_io_read:bps/(1024*1024)
+      - record: node:disk_io_write:bps
+        expr: sum(irate(node_disk_written_bytes_total[5m]))without(device)
+      - record: node:disk_io_writ:kbps
+        expr: node:disk_io_writ:bps/1024
+      - record: node:disk_io_writ:mbps
+        expr: node:disk_io_writ:bps/(1024*1024)
+
+    - name: container
+      rules:
+      - record: container:cpu:core
+        expr: sum(rate(container_cpu_usage_seconds_total{name!=""}[5m]))without(cpu)
+
+      - record: container:mem:bytes
+        expr: container_memory_rss{name!=""}
+
+      - record: container:net_io_in:bps
+        expr: sum(rate(container_network_receive_bytes_total{name!=""}[5m]))without(interface)
+      - record: container:net_io_out:bps
+        expr: sum(rate(container_network_transmit_bytes_total{name!=""}[5m]))without(interface)
+
+      - record: container:disk_io_read:bps
+        expr: sum(rate(container_fs_reads_bytes_total{name!=""}[5m]))without(device)
+      - record: container:disk_io_write:bps
+        expr: sum(rate(container_fs_writes_bytes_total{name!=""}[5m]))without(device)
+      - record: container:disk_used:bytes
+        expr: sum(container_fs_usage_bytes{name!=""})without(device)
+
+    - name: pod
+      rules:
+      - record: pod:cpu:core
+        expr: sum(container:cpu:core)by(job,namespace,pod,node)
+      - record: pod:cpu:millicore
+        expr: pod:cpu:core*1000
+
+      - record: pod:mem:bytes
+        expr: sum(container:mem:bytes)by(job,namespace,pod,node)
+      - record: pod:mem:kb
+        expr: pod:mem:bytes/1024
+      - record: pod:mem:mb
+        expr: pod:mem:bytes/(1024*1024)
+      - record: pod:mem:gb
+        expr: pod:mem:bytes/(1024*1024*1024)
+
+      - record: pod:net_io_in:bps
+        expr: sum(sum(rate(container_network_receive_bytes_total{name!=""}[5m]))without(interface))by(job,namespace,pod,node)
+      - record: pod:net_io_in:kbps
+        expr: pod:net_io_in:bps/1024
+      - record: pod:net_io_in:mbps
+        expr: pod:net_io_in:bps/(1024*1024)
+      - record: pod:net_io_out:bps
+        expr: sum(sum(rate(container_network_transmit_bytes_total{name!=""}[5m]))without(interface))by(job,namespace,pod,node)
+      - record: pod:net_io_out:kbps
+        expr: pod:net_io_out:bps/1024
+      - record: pod:net_io_out:mbps
+        expr: pod:net_io_out:bps/(1024*1024)
+
+      - record: pod:disk_io_read:bps
+        expr: sum(container:disk_io_read:bps)by(job,namespace,pod,node)
+      - record: pod:disk_io_read:kbps
+        expr: pod:disk_io_read:bps/1024
+      - record: pod:disk_io_read:mbps
+        expr: pod:disk_io_read:bps/(1024*1024)
+      - record: pod:disk_io_write:bps
+        expr: sum(container:disk_io_write:bps)by(job,namespace,pod,node)
+      - record: pod:disk_io_write:kbps
+        expr: pod:disk_io_write:bps/1024
+      - record: pod:disk_io_write:mbps
+        expr: pod:disk_io_write:bps/(1024*1024)
+      - record: pod:disk_used:bytes
+        expr: sum(container:disk_used:bytes)by(job,namespace,pod,node)
+      - record: pod:disk_used:kb
+        expr: pod:disk_used:bytes/1024
+      - record: pod:disk_used:mb
+        expr: pod:disk_used:bytes/(1024*1024)
+      - record: pod:disk_used:gb
+        expr: pod:disk_used:bytes/(1024*1024*1024)
+
